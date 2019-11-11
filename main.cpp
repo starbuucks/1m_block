@@ -78,21 +78,22 @@ static u_int32_t print_pkt (struct nfq_data *tb, bool* blocked)
 
 	uint8_t* tcp_data = (uint8_t*)((uint8_t*)tcp + (tcp -> hlen << 2));
 
-	// if(is_http(tcp_data)) {
-	// 	char* host;
-	// 	int host_len;
-	// 	get_param(tcp_data, "Host", &host, &host_len);
-	// 	if(!memcmp(bad_host, host, host_len)){
-	// 		printf("blocked\n\n");
-	// 		*blocked = true;
-	// 	}
-	// 	else{
-	// 		*blocked = false;
-	// 	}
-	// }
-	// else {
-	// 	*blocked = false;
-	// }
+	if(is_http(tcp_data)) {
+		char* buf;
+		int host_len;
+		get_param(tcp_data, "Host", &buf, &host_len);
+		string host = string(buf, host_len);
+		if(bad_host.count(host) > 0){
+			printf("blocked\n\n");
+			*blocked = true;
+		}
+		else{
+			*blocked = false;
+		}
+	}
+	else {
+		*blocked = false;
+	}
 
 	if (ret >= 0)
 		printf("payload_len=%d ", ret);

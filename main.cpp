@@ -9,10 +9,12 @@
 
 #include <libnetfilter_queue/libnetfilter_queue.h>
 
+#include <string.h>
+#include <unordered_set>
 #include "http_util.h"
 #include "packet.h"
 
-char* bad_host;
+unordered_set<string> bad_host;
 
 void dump(unsigned char* buf, int size) {
 	int i;
@@ -76,21 +78,21 @@ static u_int32_t print_pkt (struct nfq_data *tb, bool* blocked)
 
 	uint8_t* tcp_data = (uint8_t*)((uint8_t*)tcp + (tcp -> hlen << 2));
 
-	if(is_http(tcp_data)) {
-		char* host;
-		int host_len;
-		get_param(tcp_data, "Host", &host, &host_len);
-		if(!memcmp(bad_host, host, host_len)){
-			printf("blocked\n\n");
-			*blocked = true;
-		}
-		else{
-			*blocked = false;
-		}
-	}
-	else {
-		*blocked = false;
-	}
+	// if(is_http(tcp_data)) {
+	// 	char* host;
+	// 	int host_len;
+	// 	get_param(tcp_data, "Host", &host, &host_len);
+	// 	if(!memcmp(bad_host, host, host_len)){
+	// 		printf("blocked\n\n");
+	// 		*blocked = true;
+	// 	}
+	// 	else{
+	// 		*blocked = false;
+	// 	}
+	// }
+	// else {
+	// 	*blocked = false;
+	// }
 
 	if (ret >= 0)
 		printf("payload_len=%d ", ret);
@@ -104,16 +106,36 @@ static u_int32_t print_pkt (struct nfq_data *tb, bool* blocked)
 static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 	      struct nfq_data *nfa, void *data)
 {
-	bool blocked;
+	bool blocked = false;
 	u_int32_t id = print_pkt(nfa, &blocked);
-	printf("entering callback\n");
+	//printf("entering callback\n");
 	if(blocked) return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
 	else return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 }
 
+int set_bad_host(char *file_name){
+	char buf[500];
+
+	FILE* fd = fopen(file_name, "r");
+
+	while(!feof(fd)){
+		fgets(buf, 499, fd);
+		int i,j;
+		for(i = 0; buf[i] != ','; i++);
+		i++;
+		for(j = i; buf[j] != '\n'; j++);
+		//puts(string(buf, i, j-i).c_str());
+		bad_host.insert(string(buf, i, j-i));
+	}
+
+	fclose(fd);
+
+	return 0;
+}
+
 void usage(){
-	printf("syntax: netfilter_block <host>\n");
-	printf("sample: netfilter_block test.gilgil.net\n");
+	printf("syntax: 1m_block <host list in file>\n");
+	printf("sample: 1m_block top-1m.csv\n");
 }
 
 int main(int argc, char **argv)
@@ -130,7 +152,12 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	bad_host = argv[1];
+	if(!set_bad_host(argv[1])) printf("preprocessing completed\n");
+	else{
+		printf("error in reading file\n");
+		return -1;
+	}
+
 
 	printf("opening library handle\n");
 	h = nfq_open();
